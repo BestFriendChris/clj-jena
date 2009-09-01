@@ -1,5 +1,5 @@
 (ns bfc.jena.node
-  (:use clojure.contrib.test-is)
+  (:use clojure.test)
   (:require bfc.inline-tester)
   (:import (com.hp.hpl.jena.datatypes.xsd XSDDatatype)))
 

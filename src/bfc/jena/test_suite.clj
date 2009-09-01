@@ -1,5 +1,5 @@
 (ns bfc.jena.test-suite
-  (:use [clojure.contrib.test-is :only (*load-tests* run-tests)]))
+  (:use [clojure.test :only (*load-tests* run-tests)]))
 
 (def test-names [:node :ontology])
 

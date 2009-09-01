@@ -1,3 +1,3 @@
-(in-ns 'clojure.contrib.test-is)
+(in-ns 'clojure.test)
 
 (def *load-tests* (System/getProperty "runTests"))

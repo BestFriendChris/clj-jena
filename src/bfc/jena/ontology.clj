@@ -1,5 +1,5 @@
 (ns bfc.jena.ontology
-  (:use clojure.contrib.test-is)
+  (:use clojure.test)
   (:require bfc.inline-tester)
   (:import [com.hp.hpl.jena.rdf.model ResourceFactory]
            [com.hp.hpl.jena.vocabulary RDF]))
@@ -20,7 +20,7 @@
 
   (deftest testing-property
     (is (= (testing-ontology :is-a) RDF/type))
-    (are (= (.getURI (testing-ontology _1)) _2)
+    (are [k expected] (= (.getURI (testing-ontology k)) expected)
          :a "http://bfc/testing.owl#a"
          :b "http://bfc/testing.owl#b")))
 
