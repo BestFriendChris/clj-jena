@@ -15,14 +15,14 @@
 
 (when *load-tests*
   (defontology testing-ontology "http://bfc/testing.owl#"
-               :a (resource "a")
-               :b (property "b"))
+               :whatever/a (resource "a")
+               :whatever/b (property "b"))
 
   (deftest testing-property
     (is (= (testing-ontology :is-a) RDF/type))
     (are [k expected] (= (.getURI (testing-ontology k)) expected)
-         :a "http://bfc/testing.owl#a"
-         :b "http://bfc/testing.owl#b")))
+         :whatever/a "http://bfc/testing.owl#a"
+         :whatever/b "http://bfc/testing.owl#b")))
 
 (comment
 ;; Usage:

@@ -3,65 +3,90 @@
   (:require bfc.inline-tester)
   (:import (com.hp.hpl.jena.datatypes.xsd XSDDatatype)))
 
-(defn resource [ontologies & tripples]
-  (let [merged-ontology (apply merge ontologies)]
-    {:tripples (map (fn [t] (if (keyword? t) (merged-ontology t) t)) tripples)}))
+(def *current-ontologies* {})
 
-(defn named-resource [id ontologies & tripples]
-  (assoc (apply resource ontologies tripples) :id id))
+(with-test
+(defn resource [& tripples]
+  {::type ::resource
+   :tripples (apply hash-map tripples)})
 
-(defstruct type-literal :value :type)
-(defn integer-literal [v] (struct type-literal v XSDDatatype/XSDinteger))
-(defn string-literal  [v] (struct type-literal v XSDDatatype/XSDstring))
+  (testing "resource"
+    (is (= (resource :a 75)
+           {::type ::resource
+            :tripples {:a 75}}))))
+
+(with-test
+(defn named-resource [id & tripples]
+  (assoc (apply resource tripples) :id id))
+
+  (testing "named-resource"
+    (is (= (named-resource "foo"
+                           :a 75)
+           {:id "foo"
+            ::type ::resource
+            :tripples {:a 75}}))))
+
+(defstruct literal ::type :literal-type :value)
+(def integer-literal (partial struct literal ::literal XSDDatatype/XSDinteger))
+(def string-literal (partial struct literal ::literal XSDDatatype/XSDstring))
 
 (declare save!)
 
-  (defn- create-typed-literal [model type-literal]
-    (.createTypedLiteral model (:value type-literal) (:type type-literal)))
+  (with-test
+  (defn- ontology-bind [t]
+    (if (keyword? t) (*current-ontologies* t) t))
 
-  (defn- fix-predicate [model p]
-    (cond (map? p) ; struct type-literal
-            (.createTypedLiteral model (:value p) (:type p))
-          (seq? p) ; resource
-            (save! model p)
-          :else p))
+    (testing "ontology-bind"
+      (binding [*current-ontologies* {:a 1}]
+        (is (= (ontology-bind 3) 3))
+        (is (= (ontology-bind :a) 1)))))
 
-  (defn- map2
-    "Applies f to sets of two items in a single coll. If coll is not even,
-    last item is ignored.  Function f should accept 2 arguments."
-    [f coll] (map f (take-nth 2 coll) (take-nth 2 (rest coll))))
+  (defmulti convert-predicate (fn [_ p] (::type p)))
+  (defmethod convert-predicate ::literal  [model p] (.createTypedLiteral model (:value p) (:literal-type p)))
+  (defmethod convert-predicate ::resource [model p] (save! model p))
+  (defmethod convert-predicate  :default  [model p] (ontology-bind p))
 
-  (defn- fix-tripples [model & props]
-    (map2 (fn [obj pred] [obj (fix-predicate model pred)]) props))
+  (defn- fix-tripples [model props]
+    (map (fn [m]
+           (let [obj (key m)
+                 pred (val m)]
+             [(ontology-bind obj) (convert-predicate model pred)]))
+         props))
 
   (defn- create-resource [model id]
     (if id
       (.createResource model id)
       (.createResource model)))
 
-(defn save! [model resource]
-  (let [r (create-resource model (:id resource))]
-    (dorun (map (fn [[obj pred]] (.addProperty r obj pred)) (fix-tripples (:tripples resource))))
-    r))
+(defn save!
+  ([model ontologies resource] (binding [*current-ontologies* (apply merge ontologies)]
+                                 (save! model resource)))
+  ([model resource]
+    (let [r (create-resource model (:id resource))
+          tripples (fix-tripples model (:tripples resource))]
+      (dorun (map (fn [[obj pred]] (.addProperty r obj pred)) tripples))
+      r)))
 
-(comment
-;; Example usage:
-(ns bfc.whatever
-  (:require [bfc.whatever.ontology :as whatever]
-            [bfc.jena.node :as jena]))
+(when *load-tests* (import '(com.hp.hpl.jena.rdf.model ModelFactory)))
+(when *load-tests* (require '[bfc.jena.ontology :as ont]))
+(when *load-tests*
 
-(defn link-resource [{:keys [name]}]
-  (jena/resource [whatever/ontology]
-                 :is-a :whatever/node
-                 :whatever/name (jena/string-literal name)))
+  (def URI  "http://bfc/testing.owl#")
+  (def PREFIX "whatever")
 
-(defn whatever-resource [{:keys [id name link]}]
-  (jena/named-resource id [whatever/ontology]
-                 :is-a :whatever/node
-                 :whatever/name (jena/string-literal name)
-                 :whatever/link (link-resource link)))
+  (ont/defontology ontology URI
+    :whatever/node (ont/resource "Node")
+    :whatever/name (ont/property "name")
+    :whatever/link (ont/property "link"))
 
-(jena/save! model
-  (whatever-resource {:name "foo" :link {:name "bar"}}))
-)
+  (let [m (ModelFactory/createDefaultModel)]
+    (.setNsPrefix m PREFIX URI)
+    (save! m [ontology]
+           (named-resource (str URI "id")
+                           :is-a :whatever/node
+                           :whatever/link (resource :is-a :whatever/node
+                                                    :whatever/name (string-literal "foo"))))
+    ;(.write m *out* "RDF/XML-ABBREV")
+    )
+  )
 
